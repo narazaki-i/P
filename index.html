@@ -1,3 +1,11 @@
+ChatGPT:
+はい。今貼ってくれたコードが現在の index.html ですね。
+
+このコードを全部消して、下のコードに丸ごと置き換えてください。
+今回は「ブラウザのスクロール機能」ではなく、JavaScriptで直接写真を掴んで動かす方式に変更します。
+
+PCのマウスでも、iPhoneの指でも動きます。
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -10,165 +18,616 @@
                user-scalable=no,
                viewport-fit=cover">
 
-<title>360° Panorama</title>
+<title>Panorama Viewer</title>
 
 <style>
+
+/* ================================
+   画面
+================================ */
+
 html,
 body {
     margin: 0;
     padding: 0;
+
     width: 100%;
     height: 100%;
+
     overflow: hidden;
+
     background: #000;
 }
 
-.panorama-container {
+
+/* ================================
+   ビューア
+================================ */
+
+#viewer {
+
+    position: fixed;
+
+    left: 0;
+    top: 0;
+
     width: 100vw;
     height: 100dvh;
 
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: hidden;
 
     background: #000;
 
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    /*
+       マウス・指の操作を
+       JavaScriptで処理する
+    */
+    touch-action: none;
 
-    -webkit-overflow-scrolling: touch;
+    cursor: grab;
 
-    touch-action: pan-x;
-    overscroll-behavior-x: none;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
-.panorama-container::-webkit-scrollbar {
-    display: none;
+
+/* ドラッグ中 */
+
+#viewer.dragging {
+    cursor: grabbing;
 }
 
-.panorama-wrapper {
+
+/* ================================
+   写真3枚を並べる
+================================ */
+
+#track {
+
+    position: absolute;
+
+    left: 0;
+    top: 0;
+
+    height: 100%;
+
     display: flex;
-    width: max-content;
-    height: 100dvh;
+
+    will-change: transform;
 }
+
+
+/* ================================
+   写真
+================================ */
 
 .panorama {
+
     display: block;
 
+    /*
+       写真の高さを
+       画面いっぱいにする
+    */
     height: 100dvh;
+
+    /*
+       元の縦横比を維持
+    */
     width: auto;
+
+    /*
+       横幅を画面幅に
+       制限しない
+    */
     max-width: none;
+
+    /*
+       3枚を縮めない
+    */
+    flex-shrink: 0;
+
+    /*
+       写真そのものではなく
+       ビューアが操作を受け取る
+    */
+    pointer-events: none;
 
     user-select: none;
     -webkit-user-select: none;
     -webkit-user-drag: none;
-
-    pointer-events: none;
 }
-</style>
-</head>
 
-<body>
 
-<div class="panorama-container" id="container">
+/* 古いiPhoneなどへの対応 */
 
-    <!-- 左側のコピー -->
-    <img
-        src="Image_20260603_183358_987%20%282%29.jpeg"
-        class="panorama"
-        alt="360° Panorama">
+@supports not (height: 100dvh) {
 
-    <!-- 中央の写真 -->
-    <img
-        src="Image_20260603_183358_987%20%282%29.jpeg"
-        class="panorama"
-        alt="360° Panorama">
+    #viewer {
+        height: 100vh;
+    }
 
-    <!-- 右側のコピー -->
-    <img
-        src="Image_20260603_183358_987%20%282%29.jpeg"
-        class="panorama"
-        alt="360° Panorama">
-
-</div>
-
-<script>
-const container = document.getElementById("container");
-const images = document.querySelectorAll(".panorama");
-
-let imageWidth = 0;
-
-function setupPanorama() {
-
-    imageWidth = images[0].getBoundingClientRect().width;
-
-    if (imageWidth > 0) {
-        // 真ん中の写真からスタート
-        container.scrollLeft = imageWidth;
+    .panorama {
+        height: 100vh;
     }
 }
 
-container.addEventListener("scroll", () => {
+</style>
+</head>
+
+
+<body>
+
+
+<!-- ================================
+     ビューア
+================================ -->
+
+<div id="viewer">
+
+    <div id="track">
+
+
+        <!-- 左側のコピー -->
+
+        <img
+            src="Image_20260603_183358_987%20%282%29.jpeg"
+            class="panorama"
+            alt="Panorama">
+
+
+        <!-- 中央の写真 -->
+
+        <img
+            src="Image_20260603_183358_987%20%282%29.jpeg"
+            class="panorama"
+            alt="Panorama">
+
+
+        <!-- 右側のコピー -->
+
+        <img
+            src="Image_20260603_183358_987%20%282%29.jpeg"
+            class="panorama"
+            alt="Panorama">
+
+
+    </div>
+
+</div>
+
+
+<script>
+
+/* ================================
+   要素
+================================ */
+
+const viewer = document.getElementById("viewer");
+
+const track = document.getElementById("track");
+
+const images = document.querySelectorAll(".panorama");
+
+
+/* ================================
+   変数
+================================ */
+
+let imageWidth = 0;
+
+/*
+   写真の現在位置
+*/
+let position = 0;
+
+/*
+   ドラッグ中か
+*/
+let dragging = false;
+
+/*
+   ドラッグ開始時のX座標
+*/
+let startX = 0;
+
+/*
+   ドラッグ開始時の写真位置
+*/
+let startPosition = 0;
+
+
+/* ================================
+   写真幅を取得
+================================ */
+
+function updateImageWidth() {
+
+    if (images.length === 0) {
+        return;
+    }
+
+    imageWidth =
+        images[0].getBoundingClientRect().width;
+}
+
+
+/* ================================
+   写真を移動
+================================ */
+
+function updatePosition() {
+
+    track.style.transform =
+        "translate3d(" +
+        position +
+        "px, 0, 0)";
+}
+
+
+/* ================================
+   初期設定
+================================ */
+
+function initialize() {
+
+    updateImageWidth();
 
     if (imageWidth <= 0) {
         return;
     }
 
     /*
-     * 左右のコピーへ移動したら
-     * 中央の写真へ瞬間的に戻す
-     *
-     * 見た目には途切れず
-     * 360°回転しているように見える
-     */
+       3枚のうち中央を表示
 
-    if (container.scrollLeft < imageWidth * 0.5) {
+       [コピー][本体][コピー]
+                ↑
+             ここから開始
+    */
 
-        container.scrollLeft += imageWidth;
+    position = -imageWidth;
 
-    } else if (container.scrollLeft > imageWidth * 1.5) {
-
-        container.scrollLeft -= imageWidth;
-
-    }
-});
-
-let loadedCount = 0;
-
-images.forEach(image => {
-
-    image.addEventListener("load", () => {
-
-        loadedCount++;
-
-        if (loadedCount === images.length) {
-            setupPanorama();
-        }
-
-    });
-
-});
-
-if ([...images].every(image => image.complete)) {
-    setupPanorama();
+    updatePosition();
 }
 
-window.addEventListener("resize", () => {
+
+/* ================================
+   無限ループ
+================================ */
+
+function checkLoop() {
 
     if (imageWidth <= 0) {
-        setupPanorama();
         return;
     }
 
-    const oldWidth = imageWidth;
 
-    const position =
-        (container.scrollLeft - oldWidth) / oldWidth;
+    /*
+       左へ行きすぎたら
+       右側へ戻す
+    */
 
-    setupPanorama();
+    if (position <= -imageWidth * 2) {
 
-    container.scrollLeft =
-        imageWidth + position * imageWidth;
-});
+        position += imageWidth;
+
+    }
+
+
+    /*
+       右へ行きすぎたら
+       左側へ戻す
+    */
+
+    if (position >= 0) {
+
+        position -= imageWidth;
+
+    }
+
+}
+
+
+/* ================================
+   ドラッグ開始
+================================ */
+
+function startDrag(x) {
+
+    dragging = true;
+
+    startX = x;
+
+    startPosition = position;
+
+    viewer.classList.add("dragging");
+}
+
+
+/* ================================
+   ドラッグ中
+================================ */
+
+function moveDrag(x) {
+
+    if (!dragging) {
+        return;
+    }
+
+
+    /*
+       指・マウスが動いた距離
+    */
+
+    const distance =
+        x - startX;
+
+
+    /*
+       指を右へ
+       → 写真も右へ
+
+       指を左へ
+       → 写真も左へ
+    */
+
+    position =
+        startPosition + distance;
+
+
+    /*
+       端を越えたら
+       反対側へループ
+    */
+
+    checkLoop();
+
+
+    updatePosition();
+}
+
+
+/* ================================
+   ドラッグ終了
+================================ */
+
+function endDrag() {
+
+    if (!dragging) {
+        return;
+    }
+
+    dragging = false;
+
+    viewer.classList.remove("dragging");
+}
+
+
+/* ================================
+   Pointer Events
+================================ */
+
+/*
+   これで
+
+   ・PCのマウス
+   ・iPhoneの指
+   ・iPad
+   ・Android
+
+   を同じ処理で扱う
+*/
+
+
+viewer.addEventListener(
+    "pointerdown",
+    function(event) {
+
+        /*
+           PCの場合、
+           左クリックだけ使用
+        */
+
+        if (
+            event.pointerType === "mouse" &&
+            event.button !== 0
+        ) {
+            return;
+        }
+
+
+        /*
+           ポインターを
+           ビューアが保持
+        */
+
+        try {
+
+            viewer.setPointerCapture(
+                event.pointerId
+            );
+
+        } catch (e) {}
+
+
+        startDrag(event.clientX);
+
+        event.preventDefault();
+    }
+);
+
+
+viewer.addEventListener(
+    "pointermove",
+    function(event) {
+
+        if (!dragging) {
+            return;
+        }
+
+        moveDrag(event.clientX);
+
+        event.preventDefault();
+    }
+);
+
+
+viewer.addEventListener(
+    "pointerup",
+    function(event) {
+
+        endDrag();
+
+        try {
+
+            viewer.releasePointerCapture(
+                event.pointerId
+            );
+
+        } catch (e) {}
+
+    }
+);
+
+
+viewer.addEventListener(
+    "pointercancel",
+    function() {
+
+        endDrag();
+
+    }
+);
+
+
+/* ================================
+   画像読み込み
+================================ */
+
+let loadedCount = 0;
+
+
+images.forEach(
+    function(image) {
+
+        image.addEventListener(
+            "load",
+            function() {
+
+                loadedCount++;
+
+
+                /*
+                   3枚全部読み込んだら
+                   ビューアを開始
+                */
+
+                if (
+                    loadedCount === images.length
+                ) {
+
+                    initialize();
+
+                }
+
+            }
+        );
+
+    }
+);
+
+
+/* ================================
+   キャッシュされている場合
+================================ */
+
+if (
+    [...images].every(
+        function(image) {
+            return image.complete;
+        }
+    )
+) {
+
+    setTimeout(
+        initialize,
+        200
+    );
+
+}
+
+
+/* ================================
+   画面サイズ変更
+================================ */
+
+window.addEventListener(
+    "resize",
+    function() {
+
+        if (imageWidth <= 0) {
+
+            initialize();
+
+            return;
+        }
+
+
+        /*
+           現在位置を保存
+        */
+
+        const relativePosition =
+            (
+                position + imageWidth
+            ) / imageWidth;
+
+
+        /*
+           新しい写真幅
+        */
+
+        updateImageWidth();
+
+
+        if (imageWidth <= 0) {
+            return;
+        }
+
+
+        /*
+           新しい画面でも
+           だいたい同じ場所を表示
+        */
+
+        position =
+            -imageWidth
+            +
+            relativePosition * imageWidth;
+
+
+        updatePosition();
+
+    }
+);
+
+
+/* ================================
+   起動
+================================ */
+
+window.addEventListener(
+    "load",
+    function() {
+
+        setTimeout(
+            initialize,
+            300
+        );
+
+    }
+);
+
 </script>
 
 </body>
