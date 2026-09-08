@@ -10,13 +10,13 @@
                user-scalable=no,
                viewport-fit=cover">
 
-<title>Panorama Viewer</title>
+<title>Panorama Photo</title>
 
 <style>
 
-/* ================================
-   画面
-================================ */
+/* =====================================
+   画面全体
+===================================== */
 
 html,
 body {
@@ -32,12 +32,11 @@ body {
 }
 
 
-/* ================================
+/* =====================================
    ビューア
-================================ */
+===================================== */
 
 #viewer {
-
     position: fixed;
 
     left: 0;
@@ -51,11 +50,14 @@ body {
     background: #000;
 
     /*
-       マウス・指の操作を
-       JavaScriptで処理する
-    */
+     * 指やマウスの操作を
+     * JavaScriptで処理する
+     */
     touch-action: none;
 
+    /*
+     * PCでは「掴める」ことを表示
+     */
     cursor: grab;
 
     user-select: none;
@@ -70,68 +72,50 @@ body {
 }
 
 
-/* ================================
-   写真3枚を並べる
-================================ */
+/* =====================================
+   写真
+===================================== */
 
-#track {
-
+#photo {
     position: absolute;
 
-    left: 0;
     top: 0;
+    left: 0;
 
-    height: 100%;
+    /*
+     * ★写真の高さを画面いっぱいにする
+     */
+    height: 100dvh;
 
-    display: flex;
+    /*
+     * 横幅は写真の比率から自動計算
+     */
+    width: auto;
 
+    /*
+     * 横幅を画面サイズに制限しない
+     */
+    max-width: none;
+
+    /*
+     * 写真を選択・ドラッグできないようにする
+     */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+
+    pointer-events: none;
+
+    /*
+     * 移動を滑らかにする
+     */
     will-change: transform;
 }
 
 
-/* ================================
-   写真
-================================ */
-
-.panorama {
-
-    display: block;
-
-    /*
-       写真の高さを
-       画面いっぱいにする
-    */
-    height: 100dvh;
-
-    /*
-       元の縦横比を維持
-    */
-    width: auto;
-
-    /*
-       横幅を画面幅に
-       制限しない
-    */
-    max-width: none;
-
-    /*
-       3枚を縮めない
-    */
-    flex-shrink: 0;
-
-    /*
-       写真そのものではなく
-       ビューアが操作を受け取る
-    */
-    pointer-events: none;
-
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-user-drag: none;
-}
-
-
-/* 古いiPhoneなどへの対応 */
+/* =====================================
+   古いブラウザ用
+===================================== */
 
 @supports not (height: 100dvh) {
 
@@ -139,7 +123,7 @@ body {
         height: 100vh;
     }
 
-    .panorama {
+    #photo {
         height: 100vh;
     }
 }
@@ -151,178 +135,168 @@ body {
 <body>
 
 
-<!-- ================================
-     ビューア
-================================ -->
+<!-- =====================================
+     パノラマビューア
+===================================== -->
 
 <div id="viewer">
 
-    <div id="track">
-
-
-        <!-- 左側のコピー -->
-
-        <img
-            src="Image_20260603_183358_987%20%282%29.jpeg"
-            class="panorama"
-            alt="Panorama">
-
-
-        <!-- 中央の写真 -->
-
-        <img
-            src="Image_20260603_183358_987%20%282%29.jpeg"
-            class="panorama"
-            alt="Panorama">
-
-
-        <!-- 右側のコピー -->
-
-        <img
-            src="Image_20260603_183358_987%20%282%29.jpeg"
-            class="panorama"
-            alt="Panorama">
-
-
-    </div>
+    <img
+        id="photo"
+        src="Image_20260603_183358_987%20%282%29.jpeg"
+        alt="Panorama Photo">
 
 </div>
 
 
 <script>
 
-/* ================================
+/* =====================================
    要素
-================================ */
+===================================== */
 
-const viewer = document.getElementById("viewer");
+const viewer =
+    document.getElementById("viewer");
 
-const track = document.getElementById("track");
+const photo =
+    document.getElementById("photo");
 
-const images = document.querySelectorAll(".panorama");
 
-
-/* ================================
+/* =====================================
    変数
-================================ */
-
-let imageWidth = 0;
+===================================== */
 
 /*
-   写真の現在位置
-*/
+ * 写真の実際の表示幅
+ */
+let photoWidth = 0;
+
+/*
+ * 画面幅
+ */
+let viewerWidth = 0;
+
+/*
+ * 写真を左右に動かせる最大距離
+ */
+let maxMove = 0;
+
+/*
+ * 写真の現在位置
+ */
 let position = 0;
 
 /*
-   ドラッグ中か
-*/
+ * ドラッグ中かどうか
+ */
 let dragging = false;
 
 /*
-   ドラッグ開始時のX座標
-*/
+ * ドラッグ開始時のX座標
+ */
 let startX = 0;
 
 /*
-   ドラッグ開始時の写真位置
-*/
+ * ドラッグ開始時の写真位置
+ */
 let startPosition = 0;
 
 
-/* ================================
-   写真幅を取得
-================================ */
+/* =====================================
+   サイズ計算
+===================================== */
 
-function updateImageWidth() {
+function updateSize() {
 
-    if (images.length === 0) {
-        return;
-    }
+    /*
+     * 画面幅
+     */
+    viewerWidth =
+        viewer.clientWidth;
 
-    imageWidth =
-        images[0].getBoundingClientRect().width;
+
+    /*
+     * 写真の表示幅
+     */
+    photoWidth =
+        photo.getBoundingClientRect().width;
+
+
+    /*
+     * 写真が画面より大きい分だけ
+     * 左右に動かせる
+     */
+    maxMove =
+        Math.max(
+            0,
+            photoWidth - viewerWidth
+        );
+
+
+    /*
+     * 現在位置を範囲内に収める
+     */
+    position =
+        Math.max(
+            -maxMove,
+            Math.min(
+                0,
+                position
+            )
+        );
+
+
+    updatePosition();
 }
 
 
-/* ================================
-   写真を移動
-================================ */
+/* =====================================
+   写真位置を更新
+===================================== */
 
 function updatePosition() {
 
-    track.style.transform =
+    photo.style.transform =
         "translate3d(" +
         position +
         "px, 0, 0)";
 }
 
 
-/* ================================
-   初期設定
-================================ */
+/* =====================================
+   初期位置
+===================================== */
 
 function initialize() {
 
-    updateImageWidth();
+    /*
+     * 写真サイズを取得
+     */
+    updateSize();
 
-    if (imageWidth <= 0) {
-        return;
-    }
 
     /*
-       3枚のうち中央を表示
+     * 写真中央を画面中央にする
+     *
+     * 例：
+     *
+     * 写真幅 2000px
+     * 画面幅 1000px
+     *
+     * → 500px 左へ移動
+     */
 
-       [コピー][本体][コピー]
-                ↑
-             ここから開始
-    */
+    position =
+        -(maxMove / 2);
 
-    position = -imageWidth;
 
     updatePosition();
 }
 
 
-/* ================================
-   無限ループ
-================================ */
-
-function checkLoop() {
-
-    if (imageWidth <= 0) {
-        return;
-    }
-
-
-    /*
-       左へ行きすぎたら
-       右側へ戻す
-    */
-
-    if (position <= -imageWidth * 2) {
-
-        position += imageWidth;
-
-    }
-
-
-    /*
-       右へ行きすぎたら
-       左側へ戻す
-    */
-
-    if (position >= 0) {
-
-        position -= imageWidth;
-
-    }
-
-}
-
-
-/* ================================
+/* =====================================
    ドラッグ開始
-================================ */
+===================================== */
 
 function startDrag(x) {
 
@@ -336,9 +310,9 @@ function startDrag(x) {
 }
 
 
-/* ================================
+/* =====================================
    ドラッグ中
-================================ */
+===================================== */
 
 function moveDrag(x) {
 
@@ -348,40 +322,59 @@ function moveDrag(x) {
 
 
     /*
-       指・マウスが動いた距離
-    */
-
+     * マウス・指が動いた距離
+     */
     const distance =
         x - startX;
 
 
     /*
-       指を右へ
-       → 写真も右へ
-
-       指を左へ
-       → 写真も左へ
-    */
-
-    position =
+     * 写真の新しい位置
+     */
+    let newPosition =
         startPosition + distance;
 
 
     /*
-       端を越えたら
-       反対側へループ
-    */
+     * =================================
+     * 左端・右端で停止
+     * =================================
+     *
+     * position = 0
+     *     → 写真の左端
+     *
+     * position = -maxMove
+     *     → 写真の右端
+     */
 
-    checkLoop();
 
+    /*
+     * 左端より右には行かない
+     */
+
+    if (newPosition > 0) {
+        newPosition = 0;
+    }
+
+
+    /*
+     * 右端より先には行かない
+     */
+
+    if (newPosition < -maxMove) {
+        newPosition = -maxMove;
+    }
+
+
+    position = newPosition;
 
     updatePosition();
 }
 
 
-/* ================================
+/* =====================================
    ドラッグ終了
-================================ */
+===================================== */
 
 function endDrag() {
 
@@ -395,30 +388,34 @@ function endDrag() {
 }
 
 
-/* ================================
-   Pointer Events
-================================ */
+/* =====================================
+   マウス・タッチ共通操作
+===================================== */
 
 /*
-   これで
+ * PCのマウス
+ *
+ * iPhoneの指
+ *
+ * Android
+ *
+ * iPad
+ *
+ * すべてPointer Eventsで処理
+ */
 
-   ・PCのマウス
-   ・iPhoneの指
-   ・iPad
-   ・Android
 
-   を同じ処理で扱う
-*/
-
+/* -------------------------------------
+   押した
+------------------------------------- */
 
 viewer.addEventListener(
     "pointerdown",
     function(event) {
 
         /*
-           PCの場合、
-           左クリックだけ使用
-        */
+         * PCの場合は左クリックのみ
+         */
 
         if (
             event.pointerType === "mouse" &&
@@ -428,10 +425,19 @@ viewer.addEventListener(
         }
 
 
+        dragging = true;
+
+        startX =
+            event.clientX;
+
+        startPosition =
+            position;
+
+
         /*
-           ポインターを
-           ビューアが保持
-        */
+         * このビューアが
+         * ポインターを保持
+         */
 
         try {
 
@@ -439,15 +445,22 @@ viewer.addEventListener(
                 event.pointerId
             );
 
-        } catch (e) {}
+        } catch (error) {}
 
 
-        startDrag(event.clientX);
+        viewer.classList.add(
+            "dragging"
+        );
+
 
         event.preventDefault();
     }
 );
 
+
+/* -------------------------------------
+   動かした
+------------------------------------- */
 
 viewer.addEventListener(
     "pointermove",
@@ -457,12 +470,20 @@ viewer.addEventListener(
             return;
         }
 
-        moveDrag(event.clientX);
+
+        moveDrag(
+            event.clientX
+        );
+
 
         event.preventDefault();
     }
 );
 
+
+/* -------------------------------------
+   離した
+------------------------------------- */
 
 viewer.addEventListener(
     "pointerup",
@@ -470,17 +491,24 @@ viewer.addEventListener(
 
         endDrag();
 
+
         try {
 
             viewer.releasePointerCapture(
                 event.pointerId
             );
 
-        } catch (e) {}
+        } catch (error) {}
 
+
+        event.preventDefault();
     }
 );
 
+
+/* -------------------------------------
+   操作キャンセル
+------------------------------------- */
 
 viewer.addEventListener(
     "pointercancel",
@@ -492,130 +520,87 @@ viewer.addEventListener(
 );
 
 
-/* ================================
-   画像読み込み
-================================ */
+/* =====================================
+   写真読み込み完了
+===================================== */
 
-let loadedCount = 0;
+photo.addEventListener(
+    "load",
+    function() {
 
+        /*
+         * 写真のサイズが確定してから
+         * 中央表示
+         */
 
-images.forEach(
-    function(image) {
-
-        image.addEventListener(
-            "load",
-            function() {
-
-                loadedCount++;
-
-
-                /*
-                   3枚全部読み込んだら
-                   ビューアを開始
-                */
-
-                if (
-                    loadedCount === images.length
-                ) {
-
-                    initialize();
-
-                }
-
-            }
-        );
+        initialize();
 
     }
 );
 
 
-/* ================================
-   キャッシュされている場合
-================================ */
+/* =====================================
+   すでに読み込み済みの場合
+===================================== */
 
-if (
-    [...images].every(
-        function(image) {
-            return image.complete;
-        }
-    )
-) {
+if (photo.complete) {
 
     setTimeout(
         initialize,
-        200
+        100
     );
 
 }
 
 
-/* ================================
-   画面サイズ変更
-================================ */
+/* =====================================
+   画面回転・サイズ変更
+===================================== */
 
 window.addEventListener(
     "resize",
     function() {
 
-        if (imageWidth <= 0) {
+        /*
+         * 現在見ている位置の割合を保存
+         */
 
-            initialize();
+        let ratio = 0;
 
-            return;
+
+        if (maxMove > 0) {
+
+            ratio =
+                (-position) / maxMove;
+
         }
 
 
         /*
-           現在位置を保存
-        */
+         * サイズを再計算
+         */
 
-        const relativePosition =
-            (
-                position + imageWidth
-            ) / imageWidth;
+        updateSize();
 
 
         /*
-           新しい写真幅
-        */
+         * 画面回転後も
+         * だいたい同じ場所を表示
+         */
 
-        updateImageWidth();
+        if (maxMove > 0) {
 
+            position =
+                -maxMove * ratio;
 
-        if (imageWidth <= 0) {
-            return;
+        } else {
+
+            position = 0;
+
         }
-
-
-        /*
-           新しい画面でも
-           だいたい同じ場所を表示
-        */
-
-        position =
-            -imageWidth
-            +
-            relativePosition * imageWidth;
 
 
         updatePosition();
-
-    }
-);
-
-
-/* ================================
-   起動
-================================ */
-
-window.addEventListener(
-    "load",
-    function() {
-
-        setTimeout(
-            initialize,
-            300
-        );
 
     }
 );
