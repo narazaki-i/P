@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width,
+               initial-scale=1.0,
+               maximum-scale=1.0,
+               user-scalable=no,
+               viewport-fit=cover">
+
+<title>360° Panorama</title>
+
+<style>
+html,
+body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+}
+
+.panorama-container {
+    width: 100vw;
+    height: 100dvh;
+
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    background: #000;
+
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+
+    -webkit-overflow-scrolling: touch;
+
+    touch-action: pan-x;
+    overscroll-behavior-x: none;
+}
+
+.panorama-container::-webkit-scrollbar {
+    display: none;
+}
+
+.panorama-wrapper {
+    display: flex;
+    width: max-content;
+    height: 100dvh;
+}
+
+.panorama {
+    display: block;
+
+    height: 100dvh;
+    width: auto;
+    max-width: none;
+
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+
+    pointer-events: none;
+}
+</style>
+</head>
+
+<body>
+
+<div class="panorama-container" id="container">
+
+    <!-- 左側のコピー -->
+    <img
+        src="Image_20260603_183358_987%20%282%29.jpeg"
+        class="panorama"
+        alt="360° Panorama">
+
+    <!-- 中央の写真 -->
+    <img
+        src="Image_20260603_183358_987%20%282%29.jpeg"
+        class="panorama"
+        alt="360° Panorama">
+
+    <!-- 右側のコピー -->
+    <img
+        src="Image_20260603_183358_987%20%282%29.jpeg"
+        class="panorama"
+        alt="360° Panorama">
+
+</div>
+
+<script>
+const container = document.getElementById("container");
+const images = document.querySelectorAll(".panorama");
+
+let imageWidth = 0;
+
+function setupPanorama() {
+
+    imageWidth = images[0].getBoundingClientRect().width;
+
+    if (imageWidth > 0) {
+        // 真ん中の写真からスタート
+        container.scrollLeft = imageWidth;
+    }
+}
+
+container.addEventListener("scroll", () => {
+
+    if (imageWidth <= 0) {
+        return;
+    }
+
+    /*
+     * 左右のコピーへ移動したら
+     * 中央の写真へ瞬間的に戻す
+     *
+     * 見た目には途切れず
+     * 360°回転しているように見える
+     */
+
+    if (container.scrollLeft < imageWidth * 0.5) {
+
+        container.scrollLeft += imageWidth;
+
+    } else if (container.scrollLeft > imageWidth * 1.5) {
+
+        container.scrollLeft -= imageWidth;
+
+    }
+});
+
+let loadedCount = 0;
+
+images.forEach(image => {
+
+    image.addEventListener("load", () => {
+
+        loadedCount++;
+
+        if (loadedCount === images.length) {
+            setupPanorama();
+        }
+
+    });
+
+});
+
+if ([...images].every(image => image.complete)) {
+    setupPanorama();
+}
+
+window.addEventListener("resize", () => {
+
+    if (imageWidth <= 0) {
+        setupPanorama();
+        return;
+    }
+
+    const oldWidth = imageWidth;
+
+    const position =
+        (container.scrollLeft - oldWidth) / oldWidth;
+
+    setupPanorama();
+
+    container.scrollLeft =
+        imageWidth + position * imageWidth;
+});
+</script>
+
+</body>
+</html>
